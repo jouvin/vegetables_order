@@ -29,10 +29,18 @@ def write_harvest_quantity(output_file, harvest_products):
     else:
         output = open(output_file, 'w', encoding='utf-8')
 
+    products_not_ordered = []
     print('----------- Produits à récolter --------------------', file=output)
     for product, quantity in harvest_products.items():
-        print("{}: {}".format(product, quantity), file=output)
+        if quantity > 0:
+            print("{}: {}".format(product, quantity), file=output)
+        else:
+            products_not_ordered.append(product)
 
+    if len(products_not_ordered) > 0:
+        print('\n----------- Produits sans commande --------------------', file=output)
+        for product in products_not_ordered:
+            print(product)
 
 def main():
     parser = argparse.ArgumentParser()
