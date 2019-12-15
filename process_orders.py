@@ -1,11 +1,36 @@
 #!/usr/bin/env python
 
 import sys
+import re
 import argparse
 import csv
 
 EMAIL_FIELD = 'E-mail'
 NAME_FIELD = 'NOM - PRENOM'
+
+PRODUCT_PRICE_PATTERN = re.compile(r'\s*(?P<product>.+)\s*-\s*(?P<price>[0-9,]+€)\s*/\s*(?P<unit>\w+)\s*')
+
+
+class Product():
+    def __init__(self, quantity, price, unit):
+        self.quantity = quantity
+        self.price = price
+        self.unit = unit
+
+    def total_price(self):
+        return self.price * self.quantity
+
+
+class Client():
+    def __init__(self,email):
+        self.email = email
+        self.products = []
+
+    def add_product(self, product):
+        self.products.append(product)
+
+    def get_products(self):
+        return(self.products)
 
 
 def write_client_orders(output_file, orders):
@@ -69,14 +94,21 @@ def main():
                                 raise Exception('Entrée invalide: le nom est vide')
                         continue
                     # If the field is a product, create an entry in the product list to keep the original order of products
-                    if k != EMAIL_FIELD:
-                        if k not in harvest_products:
-                            harvest_products[k] = 0
-                    if v != '':
-                        entry[k] = v
-                        if k != EMAIL_FIELD:
-                            harvest_products[k] += float(v)
+                    m = PRODUCT_PRICE_PATTERN.match(k)
+                    if m:
+                        product = m.group('product')
                     elif k == EMAIL_FIELD:
+                        product = k
+                    else:
+                        raise Exception('Format produit invalide ({}).format(k)')
+                    if product != EMAIL_FIELD:
+                        if product not in harvest_products:
+                            harvest_products[product] = 0
+                    if v != '':
+                        entry[product] = v
+                        if product != EMAIL_FIELD:
+                            harvest_products[product] += float(v)
+                    elif product == EMAIL_FIELD:
                         entry[EMAIL_FIELD] = 'non spécifié'
                 orders[name] = entry
     except:
