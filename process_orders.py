@@ -12,17 +12,13 @@ PRODUCT_PRICE_PATTERN = re.compile(r'\s*(?P<product>.+)\s*-\s*(?P<price>[0-9,]+)
 
 
 class Product():
-    def __init__(self, name, price, unit):
-        self.name = name
-        self.quantity = 0
+    def __init__(self, price, unit):
         self.price = float(re.sub(',', '.', price))
         self.price_unit = unit
+        self.ordered_quantity = 0
 
-    def get_name(self):
-        return self.name
-
-    def get_quantity(self):
-        return self.quantity
+    def get_ordered_quantity(self):
+        return self.ordered_quantity
 
     def get_price(self):
         return self.price
@@ -30,11 +26,28 @@ class Product():
     def get_price_unit(self):
         return self.price_unit
 
-    def set_quantity(self, quantity):
-        self.quantity = quantity
+    def increase_quantity(self, quantity):
+        self.ordered_quantity += float(re.sub(',', '.', quantity))
+
+
+class ProductOrder():
+    def __init__(self, name, price, unit):
+        self.name = name
+        self.quantity = 0
+        self.price = 0
+
+    def get_name(self):
+        return self.name
+
+    def get_quantity(self):
+        return self.quantity
+
+    def set_quantity(self, quantity, product_params):
+        self.quantity = float(re.sub(',', '.', quantity))
+        self.price = product_params.get_price() * self.quantity
 
     def total_price(self):
-        return self.price * self.quantity
+        return self.price
 
 
 class Client():
@@ -86,16 +99,20 @@ def write_harvest_quantity(output_file, harvest_products):
 
     products_not_ordered = []
     print('----------- Produits à récolter --------------------', file=output)
-    for product, quantity in harvest_products.items():
-        if quantity > 0:
-            print("{}: {}".format(product, quantity), file=output)
+    for name, product in harvest_products.items():
+        if product.get_ordered_quantity() > 0:
+            print("{}: {} {}\t({:.2f}€/{})".format(name,
+                                                   product.get_ordered_quantity(),
+                                                   product.get_price_unit(),
+                                                   product.get_price(),
+                                                   product.get_price_unit()), file=output)
         else:
-            products_not_ordered.append(product)
+            products_not_ordered.append(name)
 
     if len(products_not_ordered) > 0:
         print('\n----------- Produits sans commande --------------------', file=output)
-        for product in products_not_ordered:
-            print(product)
+        for product_name in products_not_ordered:
+            print(product_name, file=output)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -132,17 +149,16 @@ def main():
                     m = PRODUCT_PRICE_PATTERN.match(k)
                     if m:
                         product_name = m.group('product')
-                        product = Product(product_name, m.group('price'), m.group('unit'))
+                        product_order = ProductOrder(product_name, m.group('price'), m.group('unit'))
                     else:
                         raise Exception('Format produit invalide ({})'.format(k))
 
                     if product_name not in harvest_products:
-                        harvest_products[product_name] = 0
+                        harvest_products[product_name] = Product(m.group('price'), m.group('unit'))
                     if v != '':
-                        quantity = float(v)
-                        product.set_quantity(quantity)
-                        harvest_products[product_name] += quantity
-                        client.add_product(product)
+                        product_order.set_quantity(v, harvest_products[product_name])
+                        harvest_products[product_name].increase_quantity(v)
+                        client.add_product(product_order)
                 orders[name] = client
     except:
         print("Erreur lors du traitement du fichier {}".format(options.csv))
