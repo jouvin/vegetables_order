@@ -39,6 +39,12 @@ class PDFParams:
         self.title_style = None
         self.total_style = None
 
+@singleton
+class TextFileParams:
+    def __init__(self):
+        self.file = None
+
+
 class Product():
     def __init__(self, price, unit):
         self.price = float(re.sub(',', '.', price))
@@ -96,11 +102,17 @@ class Client():
         self.email = email
 
 
-def write_client_orders(output_file, orders):
+def text_file_init(output_file):
+    file_params = TextFileParams()
     if output_file is None:
-        output = sys.stdout
+        file_params.file = sys.stdout
     else:
-        output = open(output_file, 'w', encoding='utf-8')
+        file_params.file = open(output_file, 'w', encoding='utf-8')
+
+def write_client_orders(output_file, orders):
+    file_params = TextFileParams()
+    if file_params.file is None:
+        text_file_init(output_file)
 
     for name,entry in orders.items():
         client_email = entry.get_email()
@@ -109,38 +121,37 @@ def write_client_orders(output_file, orders):
         if client_email is None:
             client_email = "email non spécifié"
 
-        print('-----------------------------------------------------------', file=output)
-        print("Commande pour {} ({})".format(name, client_email), file=output)
+        print('-----------------------------------------------------------', file=file_params.file)
+        print("Commande pour {} ({})".format(name, client_email), file=file_params.file)
         for product in entry.get_products():
-            print('{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price()), file=output)
+            print('{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price()), file=file_params.file)
             total_price += product.total_price()
-        print("\nPrix total = {:.2f}€".format(total_price), file=output)
-        print('-----------------------------------------------------------', file=output)
-        print(file=output)
+        print("\nPrix total = {:.2f}€".format(total_price), file=file_params.file)
+        print('-----------------------------------------------------------', file=file_params.file)
+        print(file=file_params.file)
 
 
 def write_harvest_quantity(output_file, harvest_products):
-    if output_file is None:
-        output = sys.stdout
-    else:
-        output = open(output_file, 'w', encoding='utf-8')
+    file_params = TextFileParams()
+    if file_params.file is None:
+        text_file_init(output_file)
 
     products_not_ordered = []
-    print('----------- Produits à récolter --------------------', file=output)
+    print('----------- Produits à récolter --------------------', file=file_params.file)
     for name, product in harvest_products.items():
         if product.get_ordered_quantity() > 0:
             print("{}: {} {}\t({:.2f}€/{})".format(name,
                                                    product.get_ordered_quantity(),
                                                    product.get_price_unit(),
                                                    product.get_price(),
-                                                   product.get_price_unit()), file=output)
+                                                   product.get_price_unit()), file=file_params.file)
         else:
             products_not_ordered.append(name)
 
     if len(products_not_ordered) > 0:
-        print('\n----------- Produits sans commande --------------------', file=output)
+        print('\n----------- Produits sans commande --------------------', file=file_params.file)
         for product_name in products_not_ordered:
-            print(product_name, file=output)
+            print(product_name, file=file_params.file)
 
 
 def PDFPageLayout(canvas, doc):
@@ -227,11 +238,14 @@ def write_pdf_file():
 
 def main():
     parser = argparse.ArgumentParser()
-    action = parser.add_mutually_exclusive_group(required=True)
-    action.add_argument('--clients', action='store_true', default=False, help='Commandes clients')
-    action.add_argument('--harvest', '--recolte', action='store_true', default=False, help='Produits à récolter')
+    clients = parser.add_mutually_exclusive_group()
+    clients.add_argument('--clients', action='store_true', default=True, help='Commandes clients')
+    clients.add_argument('--no-clients', action='store_false', dest='clients', help='Ne pas produire les commandes clients')
+    harvest = parser.add_mutually_exclusive_group()
+    harvest.add_argument('--harvest', '--recolte', action='store_true', default=True, help='Produits à récolter')
+    harvest.add_argument('--no-harvest', '--no-recolte', action='store_false', dest='harvest', help='Produits à récolter')
     parser.add_argument('--output', help='Nom de fichier de sortie')
-    parser.add_argument('--format', choices=['pdf', 'text'], default='text', help='Ecrire un fichier PDF au lieu de texte')
+    parser.add_argument('--format', choices=['pdf', 'text'], default='pdf', help='Ecrire un fichier PDF au lieu de texte')
     parser.add_argument('csv', help='Fichier des commandes Framaform')
     options = parser.parse_args()
     if options.format == 'pdf':
