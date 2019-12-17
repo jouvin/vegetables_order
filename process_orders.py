@@ -4,12 +4,19 @@ import sys
 import re
 import argparse
 import csv
+from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.rl_config import defaultPageSize
+from reportlab.lib.units import inch
+
 
 EMAIL_FIELD = 'E-mail'
 NAME_FIELD = 'NOM - PRENOM'
 
 PRODUCT_PRICE_PATTERN = re.compile(r'\s*(?P<product>.+)\s*-\s*(?P<price>[0-9,]+)€\s*/\s*(?P<unit>\w+)\s*')
 
+PAGE_HEIGHT=defaultPageSize[1]
+PAGE_WIDTH=defaultPageSize[0]
 
 class Product():
     def __init__(self, price, unit):
@@ -114,14 +121,63 @@ def write_harvest_quantity(output_file, harvest_products):
         for product_name in products_not_ordered:
             print(product_name, file=output)
 
+
+def clientPageLayout(canvas, doc):
+    canvas.saveState()
+    canvas.setFont('Times-Roman',9)
+    canvas.drawString(inch, 0.75 * inch, "Page {}".format(doc.page))
+    canvas.restoreState()
+
+
+def client_orders_pdf(filename, orders):
+    doc = SimpleDocTemplate(filename)
+    styles = getSampleStyleSheet()
+    normal_style = styles["Normal"]
+    title_style = styles["Heading1"]
+    title_style.alignment = 1
+    email_style = ParagraphStyle(normal_style)
+    email_style.alignment = 1
+    total_style = ParagraphStyle(normal_style)
+    total_style.fontName = title_style.fontName
+    Story = []
+
+    for name,entry in orders.items():
+        total_price = 0
+        client_email = entry.get_email()
+        if client_email is None:
+            client_email = "non spécifié"
+
+        Story.append(Paragraph("Commande de {}".format(name), title_style))
+        Story.append(Paragraph("Email : {}".format(client_email), email_style))
+        Story.append(Spacer(1, 0.2 * inch))
+
+        for product in entry.get_products():
+            product_line = '{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price())
+            Story.append(Paragraph(product_line, normal_style))
+            total_price += product.total_price()
+
+        total_line = "\nPrix total pour {} = {:.2f}€".format(name, total_price)
+        Story.append(Spacer(1, 0.2 * inch))
+        Story.append(Paragraph(total_line, total_style))
+        Story.append(Spacer(1, 1 * inch))
+        #Story.append(PageBreak())
+
+    doc.build(Story, onFirstPage=clientPageLayout, onLaterPages=clientPageLayout)
+
+
 def main():
     parser = argparse.ArgumentParser()
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument('--clients', action='store_true', default=False, help='Commandes clients')
     action.add_argument('--harvest', '--recolte', action='store_true', default=False, help='Produits à récolter')
     parser.add_argument('--output', help='Nom de fichier de sortie')
+    parser.add_argument('--format', choices=['pdf', 'text'], default='text', help='Ecrire un fichier PDF au lieu de texte')
     parser.add_argument('csv', help='Fichier des commandes Framaform')
     options = parser.parse_args()
+    if options.format == 'pdf':
+        pdf_output = True
+    else:
+        pdf_output = False
 
     orders = dict()
     harvest_products = dict()
@@ -165,7 +221,10 @@ def main():
         raise
 
     if options.clients:
-        write_client_orders(options.output, orders)
+        if pdf_output:
+            client_orders_pdf(options.output, orders)
+        else:
+            write_client_orders(options.output, orders)
 
     if options.harvest:
         write_harvest_quantity(options.output, harvest_products)
