@@ -35,6 +35,7 @@ class PDFParams:
         self.story = None
         self.email_style = None
         self.normal_style = None
+        self.subtitle_style = None
         self.title_style = None
         self.total_style = None
 
@@ -156,6 +157,8 @@ def PDFInit(filename):
     pdf_params.normal_style = styles["Normal"]
     pdf_params.title_style = styles["Heading1"]
     pdf_params.title_style.alignment = 1
+    pdf_params.subtitle_style = styles["Heading3"]
+    pdf_params.subtitle_style.alignment = 1
     pdf_params.email_style = ParagraphStyle(pdf_params.normal_style)
     pdf_params.email_style.alignment = 1
     pdf_params.total_style = ParagraphStyle(pdf_params.normal_style)
@@ -188,6 +191,33 @@ def client_orders_pdf(filename, orders):
         pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
         pdf_params.story.append(Spacer(1, 1 * inch))
         #pdf_params.story.append(PageBreak())
+
+
+def harvest_quantity_pdf(filename, harvest_products):
+    pdf_params = PDFParams()
+    if pdf_params.doc is None:
+        PDFInit(filename)
+    else:
+        pdf_params.story.append(PageBreak())
+
+    pdf_params.story.append(Paragraph("Produits à récolter", pdf_params.title_style))
+
+    products_not_ordered = []
+    for name, product in harvest_products.items():
+        if product.get_ordered_quantity() > 0:
+            product_line = "{}: {} {}\t({:.2f}€/{})".format(name,
+                                                            product.get_ordered_quantity(),
+                                                            product.get_price_unit(),
+                                                            product.get_price(),
+                                                            product.get_price_unit())
+            pdf_params.story.append(Paragraph(product_line, pdf_params.normal_style))
+        else:
+            products_not_ordered.append(name)
+
+    if len(products_not_ordered) > 0:
+        pdf_params.story.append(Paragraph("Produits sans commande ", pdf_params.subtitle_style))
+        for product_name in products_not_ordered:
+            pdf_params.story.append(Paragraph(product_name, pdf_params.normal_style))
 
 
 def write_pdf_file():
@@ -253,6 +283,8 @@ def main():
     if pdf_output:
         if options.clients:
             client_orders_pdf(options.output, orders)
+        if options.harvest:
+            harvest_quantity_pdf(options.output, harvest_products)
         write_pdf_file()
     else:
         if options.clients:
