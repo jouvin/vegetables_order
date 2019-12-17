@@ -4,11 +4,45 @@ import sys
 import re
 import argparse
 import csv
+from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.rl_config import defaultPageSize
+from reportlab.lib.units import inch
+
 
 EMAIL_FIELD = 'E-mail'
 NAME_FIELD = 'NOM - PRENOM'
 
 PRODUCT_PRICE_PATTERN = re.compile(r'\s*(?P<product>.+)\s*-\s*(?P<price>[0-9,]+)€\s*/\s*(?P<unit>\w+)\s*')
+
+PAGE_HEIGHT=defaultPageSize[1]
+PAGE_WIDTH=defaultPageSize[0]
+
+# Singleton decorator definition
+def singleton(cls):
+    instances = {}
+
+    def getinstance():
+        if cls not in instances:
+            instances[cls] = cls()
+        return instances[cls]
+    return getinstance
+
+@singleton
+class PDFParams:
+    def __init__(self):
+        self.doc = None
+        self.story = None
+        self.email_style = None
+        self.normal_style = None
+        self.subtitle_style = None
+        self.title_style = None
+        self.total_style = None
+
+@singleton
+class TextFileParams:
+    def __init__(self):
+        self.file = None
 
 
 class Product():
@@ -68,11 +102,17 @@ class Client():
         self.email = email
 
 
-def write_client_orders(output_file, orders):
+def text_file_init(output_file):
+    file_params = TextFileParams()
     if output_file is None:
-        output = sys.stdout
+        file_params.file = sys.stdout
     else:
-        output = open(output_file, 'w', encoding='utf-8')
+        file_params.file = open(output_file, 'w', encoding='utf-8')
+
+def write_client_orders(output_file, orders):
+    file_params = TextFileParams()
+    if file_params.file is None:
+        text_file_init(output_file)
 
     for name,entry in orders.items():
         client_email = entry.get_email()
@@ -81,47 +121,137 @@ def write_client_orders(output_file, orders):
         if client_email is None:
             client_email = "email non spécifié"
 
-        print('-----------------------------------------------------------', file=output)
-        print("Commande pour {} ({})".format(name, client_email), file=output)
+        print('-----------------------------------------------------------', file=file_params.file)
+        print("Commande pour {} ({})".format(name, client_email), file=file_params.file)
         for product in entry.get_products():
-            print('{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price()), file=output)
+            print('{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price()), file=file_params.file)
             total_price += product.total_price()
-        print("\nPrix total = {:.2f}€".format(total_price), file=output)
-        print('-----------------------------------------------------------', file=output)
-        print(file=output)
+        print("\nPrix total = {:.2f}€".format(total_price), file=file_params.file)
+        print('-----------------------------------------------------------', file=file_params.file)
+        print(file=file_params.file)
 
 
 def write_harvest_quantity(output_file, harvest_products):
-    if output_file is None:
-        output = sys.stdout
-    else:
-        output = open(output_file, 'w', encoding='utf-8')
+    file_params = TextFileParams()
+    if file_params.file is None:
+        text_file_init(output_file)
 
     products_not_ordered = []
-    print('----------- Produits à récolter --------------------', file=output)
+    print('----------- Produits à récolter --------------------', file=file_params.file)
     for name, product in harvest_products.items():
         if product.get_ordered_quantity() > 0:
             print("{}: {} {}\t({:.2f}€/{})".format(name,
                                                    product.get_ordered_quantity(),
                                                    product.get_price_unit(),
                                                    product.get_price(),
-                                                   product.get_price_unit()), file=output)
+                                                   product.get_price_unit()), file=file_params.file)
         else:
             products_not_ordered.append(name)
 
     if len(products_not_ordered) > 0:
-        print('\n----------- Produits sans commande --------------------', file=output)
+        print('\n----------- Produits sans commande --------------------', file=file_params.file)
         for product_name in products_not_ordered:
-            print(product_name, file=output)
+            print(product_name, file=file_params.file)
+
+
+def PDFPageLayout(canvas, doc):
+    canvas.saveState()
+    canvas.setFont('Times-Roman',9)
+    canvas.drawString(inch, 0.75 * inch, "Page {}".format(doc.page))
+    canvas.restoreState()
+
+
+def PDFInit(filename):
+    pdf_params = PDFParams()
+    pdf_params.doc = SimpleDocTemplate(filename)
+    styles = getSampleStyleSheet()
+    pdf_params.normal_style = styles["Normal"]
+    pdf_params.title_style = styles["Heading1"]
+    pdf_params.title_style.alignment = 1
+    pdf_params.subtitle_style = styles["Heading3"]
+    pdf_params.subtitle_style.alignment = 1
+    pdf_params.email_style = ParagraphStyle(pdf_params.normal_style)
+    pdf_params.email_style.alignment = 1
+    pdf_params.total_style = ParagraphStyle(pdf_params.normal_style)
+    pdf_params.total_style.fontName = pdf_params.title_style.fontName
+    pdf_params.story = []
+
+
+def client_orders_pdf(filename, orders):
+    pdf_params = PDFParams()
+    if pdf_params.doc is None:
+        PDFInit(filename)
+
+    for name,entry in orders.items():
+        total_price = 0
+        client_email = entry.get_email()
+        if client_email is None:
+            client_email = "non spécifié"
+
+        pdf_params.story.append(Paragraph("Commande de {}".format(name), pdf_params.title_style))
+        pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
+        pdf_params.story.append(Spacer(1, 0.2 * inch))
+
+        for product in entry.get_products():
+            product_line = '{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price())
+            pdf_params.story.append(Paragraph(product_line, pdf_params.normal_style))
+            total_price += product.total_price()
+
+        total_line = "\nPrix total pour {} = {:.2f}€".format(name, total_price)
+        pdf_params.story.append(Spacer(1, 0.2 * inch))
+        pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
+        pdf_params.story.append(Spacer(1, 1 * inch))
+        #pdf_params.story.append(PageBreak())
+
+
+def harvest_quantity_pdf(filename, harvest_products):
+    pdf_params = PDFParams()
+    if pdf_params.doc is None:
+        PDFInit(filename)
+    else:
+        pdf_params.story.append(PageBreak())
+
+    pdf_params.story.append(Paragraph("Produits à récolter", pdf_params.title_style))
+
+    products_not_ordered = []
+    for name, product in harvest_products.items():
+        if product.get_ordered_quantity() > 0:
+            product_line = "{}: {} {}\t({:.2f}€/{})".format(name,
+                                                            product.get_ordered_quantity(),
+                                                            product.get_price_unit(),
+                                                            product.get_price(),
+                                                            product.get_price_unit())
+            pdf_params.story.append(Paragraph(product_line, pdf_params.normal_style))
+        else:
+            products_not_ordered.append(name)
+
+    if len(products_not_ordered) > 0:
+        pdf_params.story.append(Paragraph("Produits sans commande ", pdf_params.subtitle_style))
+        for product_name in products_not_ordered:
+            pdf_params.story.append(Paragraph(product_name, pdf_params.normal_style))
+
+
+def write_pdf_file():
+    pdf_params = PDFParams()
+    pdf_params.doc.build(pdf_params.story, onFirstPage=PDFPageLayout, onLaterPages=PDFPageLayout)
+
 
 def main():
     parser = argparse.ArgumentParser()
-    action = parser.add_mutually_exclusive_group(required=True)
-    action.add_argument('--clients', action='store_true', default=False, help='Commandes clients')
-    action.add_argument('--harvest', '--recolte', action='store_true', default=False, help='Produits à récolter')
+    clients = parser.add_mutually_exclusive_group()
+    clients.add_argument('--clients', action='store_true', default=True, help='Commandes clients')
+    clients.add_argument('--no-clients', action='store_false', dest='clients', help='Ne pas produire les commandes clients')
+    harvest = parser.add_mutually_exclusive_group()
+    harvest.add_argument('--harvest', '--recolte', action='store_true', default=True, help='Produits à récolter')
+    harvest.add_argument('--no-harvest', '--no-recolte', action='store_false', dest='harvest', help='Produits à récolter')
     parser.add_argument('--output', help='Nom de fichier de sortie')
+    parser.add_argument('--format', choices=['pdf', 'text'], default='pdf', help='Ecrire un fichier PDF au lieu de texte')
     parser.add_argument('csv', help='Fichier des commandes Framaform')
     options = parser.parse_args()
+    if options.format == 'pdf':
+        pdf_output = True
+    else:
+        pdf_output = False
 
     orders = dict()
     harvest_products = dict()
@@ -164,11 +294,17 @@ def main():
         print("Erreur lors du traitement du fichier {}".format(options.csv))
         raise
 
-    if options.clients:
-        write_client_orders(options.output, orders)
-
-    if options.harvest:
-        write_harvest_quantity(options.output, harvest_products)
+    if pdf_output:
+        if options.clients:
+            client_orders_pdf(options.output, orders)
+        if options.harvest:
+            harvest_quantity_pdf(options.output, harvest_products)
+        write_pdf_file()
+    else:
+        if options.clients:
+            write_client_orders(options.output, orders)
+        if options.harvest:
+            write_harvest_quantity(options.output, harvest_products)
 
 
 if __name__ == "__main__":
