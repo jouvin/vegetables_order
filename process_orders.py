@@ -18,6 +18,26 @@ PRODUCT_PRICE_PATTERN = re.compile(r'\s*(?P<product>.+)\s*-\s*(?P<price>[0-9,]+)
 PAGE_HEIGHT=defaultPageSize[1]
 PAGE_WIDTH=defaultPageSize[0]
 
+# Singleton decorator definition
+def singleton(cls):
+    instances = {}
+
+    def getinstance():
+        if cls not in instances:
+            instances[cls] = cls()
+        return instances[cls]
+    return getinstance
+
+@singleton
+class PDFParams:
+    def __init__(self):
+        self.doc = None
+        self.story = None
+        self.email_style = None
+        self.normal_style = None
+        self.title_style = None
+        self.total_style = None
+
 class Product():
     def __init__(self, price, unit):
         self.price = float(re.sub(',', '.', price))
@@ -122,24 +142,31 @@ def write_harvest_quantity(output_file, harvest_products):
             print(product_name, file=output)
 
 
-def clientPageLayout(canvas, doc):
+def PDFPageLayout(canvas, doc):
     canvas.saveState()
     canvas.setFont('Times-Roman',9)
     canvas.drawString(inch, 0.75 * inch, "Page {}".format(doc.page))
     canvas.restoreState()
 
 
-def client_orders_pdf(filename, orders):
-    doc = SimpleDocTemplate(filename)
+def PDFInit(filename):
+    pdf_params = PDFParams()
+    pdf_params.doc = SimpleDocTemplate(filename)
     styles = getSampleStyleSheet()
-    normal_style = styles["Normal"]
-    title_style = styles["Heading1"]
-    title_style.alignment = 1
-    email_style = ParagraphStyle(normal_style)
-    email_style.alignment = 1
-    total_style = ParagraphStyle(normal_style)
-    total_style.fontName = title_style.fontName
-    Story = []
+    pdf_params.normal_style = styles["Normal"]
+    pdf_params.title_style = styles["Heading1"]
+    pdf_params.title_style.alignment = 1
+    pdf_params.email_style = ParagraphStyle(pdf_params.normal_style)
+    pdf_params.email_style.alignment = 1
+    pdf_params.total_style = ParagraphStyle(pdf_params.normal_style)
+    pdf_params.total_style.fontName = pdf_params.title_style.fontName
+    pdf_params.story = []
+
+
+def client_orders_pdf(filename, orders):
+    pdf_params = PDFParams()
+    if pdf_params.doc is None:
+        PDFInit(filename)
 
     for name,entry in orders.items():
         total_price = 0
@@ -147,22 +174,25 @@ def client_orders_pdf(filename, orders):
         if client_email is None:
             client_email = "non spécifié"
 
-        Story.append(Paragraph("Commande de {}".format(name), title_style))
-        Story.append(Paragraph("Email : {}".format(client_email), email_style))
-        Story.append(Spacer(1, 0.2 * inch))
+        pdf_params.story.append(Paragraph("Commande de {}".format(name), pdf_params.title_style))
+        pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
+        pdf_params.story.append(Spacer(1, 0.2 * inch))
 
         for product in entry.get_products():
             product_line = '{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price())
-            Story.append(Paragraph(product_line, normal_style))
+            pdf_params.story.append(Paragraph(product_line, pdf_params.normal_style))
             total_price += product.total_price()
 
         total_line = "\nPrix total pour {} = {:.2f}€".format(name, total_price)
-        Story.append(Spacer(1, 0.2 * inch))
-        Story.append(Paragraph(total_line, total_style))
-        Story.append(Spacer(1, 1 * inch))
-        #Story.append(PageBreak())
+        pdf_params.story.append(Spacer(1, 0.2 * inch))
+        pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
+        pdf_params.story.append(Spacer(1, 1 * inch))
+        #pdf_params.story.append(PageBreak())
 
-    doc.build(Story, onFirstPage=clientPageLayout, onLaterPages=clientPageLayout)
+
+def write_pdf_file():
+    pdf_params = PDFParams()
+    pdf_params.doc.build(pdf_params.story, onFirstPage=PDFPageLayout, onLaterPages=PDFPageLayout)
 
 
 def main():
@@ -220,14 +250,15 @@ def main():
         print("Erreur lors du traitement du fichier {}".format(options.csv))
         raise
 
-    if options.clients:
-        if pdf_output:
+    if pdf_output:
+        if options.clients:
             client_orders_pdf(options.output, orders)
-        else:
+        write_pdf_file()
+    else:
+        if options.clients:
             write_client_orders(options.output, orders)
-
-    if options.harvest:
-        write_harvest_quantity(options.output, harvest_products)
+        if options.harvest:
+            write_harvest_quantity(options.output, harvest_products)
 
 
 if __name__ == "__main__":
