@@ -68,9 +68,10 @@ class Product():
 
 
 class ProductOrder():
-    def __init__(self, name, price, unit):
+    def __init__(self, name):
         self.name = name
         self.quantity = 0
+        self.quantity_unit = None
         self.price = 0
 
     def get_name(self):
@@ -79,8 +80,12 @@ class ProductOrder():
     def get_quantity(self):
         return self.quantity
 
+    def get_quantity_unit(self):
+        return self.quantity_unit
+
     def set_quantity(self, quantity, product_params):
         self.quantity = float(re.sub(',', '.', quantity))
+        self.quantity_unit = product_params.get_price_unit()
         self.price = product_params.get_price() * self.quantity
 
     def total_price(self):
@@ -127,7 +132,10 @@ def write_client_orders(output_file, orders):
         print('-----------------------------------------------------------', file=file_params.file)
         print("Commande pour {} ({})".format(name, client_email), file=file_params.file)
         for product in entry.get_products():
-            print('{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price()), file=file_params.file)
+            print('{}: {} {}\t({:.2f}€)'.format(product.get_name(),
+                                                product.get_quantity(),
+                                                product.get_quantity_unit(),
+                                                product.total_price()), file=file_params.file)
             total_price += product.total_price()
         print("\nPrix total = {:.2f}€".format(total_price), file=file_params.file)
         print('-----------------------------------------------------------', file=file_params.file)
@@ -202,10 +210,15 @@ def client_orders_pdf(filename, orders):
         pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
         pdf_params.story.append(Spacer(1, 0.2 * inch))
 
+        product_table = [[[Paragraph("Produit", style=pdf_params.table_title_style)],
+                          [Paragraph("Quantité", style=pdf_params.table_title_style)],
+                          [Paragraph("Prix", style=pdf_params.table_title_style)]]]
         for product in entry.get_products():
-            product_line = '{}: {}\t({:.2f}€)'.format(product.get_name(), product.get_quantity(), product.total_price())
-            pdf_params.story.append(Paragraph(product_line, pdf_params.normal_style))
+            product_table.append([product.get_name(),
+                                  '{} {}'.format(product.get_quantity(), product.get_quantity_unit()),
+                                  '{:.2f}€'.format(product.total_price())])
             total_price += product.total_price()
+        pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
 
         total_line = "\nPrix total pour {} = {:.2f}€".format(name, total_price)
         pdf_params.story.append(Spacer(1, 0.2 * inch))
@@ -294,7 +307,7 @@ def main():
                     m = PRODUCT_PRICE_PATTERN.match(k)
                     if m:
                         product_name = m.group('product')
-                        product_order = ProductOrder(product_name, m.group('price'), m.group('unit'))
+                        product_order = ProductOrder(product_name)
                     else:
                         raise Exception('Format produit invalide ({})'.format(k))
 
