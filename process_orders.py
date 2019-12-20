@@ -96,6 +96,7 @@ class Client():
     def __init__(self):
         self.email = None
         self.products = []
+        self.total_price = None
 
     def add_product(self, product):
         self.products.append(product)
@@ -105,6 +106,13 @@ class Client():
 
     def get_products(self):
         return self.products
+
+    def get_total_price(self):
+        if self.total_price is None:
+            self.total_price = 0
+            for product in self.products:
+                self.total_price += product.total_price()
+        return self.total_price
 
     def set_email(self, email):
         self.email = email
@@ -122,22 +130,20 @@ def write_client_orders(output_file, orders):
     if file_params.file is None:
         text_file_init(output_file)
 
-    for name,entry in orders.items():
-        client_email = entry.get_email()
-        total_price = 0
+    for client_name,client in orders.items():
+        client_email = client.get_email()
 
         if client_email is None:
             client_email = "email non spécifié"
 
         print('-----------------------------------------------------------', file=file_params.file)
-        print("Commande pour {} ({})".format(name, client_email), file=file_params.file)
-        for product in entry.get_products():
+        print("Commande pour {} ({})".format(client_name, client_email), file=file_params.file)
+        for product in client.get_products():
             print('{}: {} {}\t({:.2f}€)'.format(product.get_name(),
                                                 product.get_quantity(),
                                                 product.get_quantity_unit(),
                                                 product.total_price()), file=file_params.file)
-            total_price += product.total_price()
-        print("\nPrix total = {:.2f}€".format(total_price), file=file_params.file)
+        print("\nPrix total = {:.2f}€".format(client.get_total_price()), file=file_params.file)
         print('-----------------------------------------------------------', file=file_params.file)
         print(file=file_params.file)
 
@@ -200,27 +206,25 @@ def client_orders_pdf(filename, orders):
     if pdf_params.doc is None:
         PDFInit(filename)
 
-    for name,entry in orders.items():
-        total_price = 0
-        client_email = entry.get_email()
+    for client_name,client in orders.items():
+        client_email = client.get_email()
         if client_email is None:
             client_email = "non spécifié"
 
-        pdf_params.story.append(Paragraph("Commande de {}".format(name), pdf_params.title_style))
+        pdf_params.story.append(Paragraph("Commande de {}".format(client_name), pdf_params.title_style))
         pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
         pdf_params.story.append(Spacer(1, 0.2 * inch))
 
         product_table = [[[Paragraph("Produit", style=pdf_params.table_title_style)],
                           [Paragraph("Quantité", style=pdf_params.table_title_style)],
                           [Paragraph("Prix", style=pdf_params.table_title_style)]]]
-        for product in entry.get_products():
+        for product in client.get_products():
             product_table.append([product.get_name(),
                                   '{} {}'.format(product.get_quantity(), product.get_quantity_unit()),
                                   '{:.2f}€'.format(product.total_price())])
-            total_price += product.total_price()
         pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
 
-        total_line = "\nPrix total pour {} = {:.2f}€".format(name, total_price)
+        total_line = "\nPrix total pour {} = {:.2f}€".format(client_name, client.get_total_price())
         pdf_params.story.append(Spacer(1, 0.2 * inch))
         pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
         pdf_params.story.append(Spacer(1, 1 * inch))
@@ -255,6 +259,24 @@ def harvest_quantity_pdf(filename, harvest_products):
         for product_name in products_not_ordered:
             product_table.append([name])
         pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
+
+
+# Must no be called before client_orders_pdf() or the price will be wrong
+def clients_summary_pdf(filename, orders):
+    pdf_params = PDFParams()
+    if pdf_params.doc is None:
+        PDFInit(filename)
+    else:
+        pdf_params.story.append(PageBreak())
+
+    pdf_params.story.append(Paragraph("Somme Dûe par Client", pdf_params.title_style))
+
+    clients_table = [[[Paragraph("Nom", style=pdf_params.table_title_style)],
+                      [Paragraph("Somme Dûe", style=pdf_params.table_title_style)]]]
+    for client_name,client in orders.items():
+        clients_table.append([client_name,
+                              '{:.2f}€'.format(client.get_total_price())])
+    pdf_params.story.append(Table(clients_table, style=pdf_params.table_style))
 
 
 def write_pdf_file():
@@ -325,6 +347,7 @@ def main():
     if pdf_output:
         if options.clients:
             client_orders_pdf(options.output, orders)
+            clients_summary_pdf(options.output, orders)
         if options.harvest:
             harvest_quantity_pdf(options.output, harvest_products)
         write_pdf_file()
