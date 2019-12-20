@@ -4,10 +4,11 @@ import sys
 import re
 import argparse
 import csv
-from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, PageBreak, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.rl_config import defaultPageSize
 from reportlab.lib.units import inch
+from reportlab.lib import colors
 
 
 EMAIL_FIELD = 'E-mail'
@@ -36,6 +37,8 @@ class PDFParams:
         self.email_style = None
         self.normal_style = None
         self.subtitle_style = None
+        self.table_style = None
+        self.table_title_style = None
         self.title_style = None
         self.total_style = None
 
@@ -164,6 +167,7 @@ def PDFPageLayout(canvas, doc):
 def PDFInit(filename):
     pdf_params = PDFParams()
     pdf_params.doc = SimpleDocTemplate(filename)
+
     styles = getSampleStyleSheet()
     pdf_params.normal_style = styles["Normal"]
     pdf_params.title_style = styles["Heading1"]
@@ -174,6 +178,12 @@ def PDFInit(filename):
     pdf_params.email_style.alignment = 1
     pdf_params.total_style = ParagraphStyle(pdf_params.normal_style)
     pdf_params.total_style.fontName = pdf_params.title_style.fontName
+
+    pdf_params.table_style = TableStyle([('INNERGRID', (0,0), (-1,-1), 0.25, colors.black),
+                                         ('BOX', (0,0), (-1,-1), 0.25, colors.black),])
+    pdf_params.table_title_style = ParagraphStyle(pdf_params.normal_style)
+    pdf_params.table_title_style.fontName = pdf_params.title_style.fontName
+
     pdf_params.story = []
 
 
@@ -214,21 +224,24 @@ def harvest_quantity_pdf(filename, harvest_products):
     pdf_params.story.append(Paragraph("Produits à récolter", pdf_params.title_style))
 
     products_not_ordered = []
+    product_table = [[[Paragraph("Produit", style=pdf_params.table_title_style)],
+                      [Paragraph("Quantité", style=pdf_params.table_title_style)],
+                      [Paragraph("Prix unitaire", style=pdf_params.table_title_style)]]]
     for name, product in harvest_products.items():
         if product.get_ordered_quantity() > 0:
-            product_line = "{}: {} {}\t({:.2f}€/{})".format(name,
-                                                            product.get_ordered_quantity(),
-                                                            product.get_price_unit(),
-                                                            product.get_price(),
-                                                            product.get_price_unit())
-            pdf_params.story.append(Paragraph(product_line, pdf_params.normal_style))
+            product_table.append([name,
+                                  '{} {}'.format(product.get_ordered_quantity(), product.get_price_unit()),
+                                  '{}€/{}'.format(product.get_price(), product.get_price_unit())])
         else:
             products_not_ordered.append(name)
+    pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
 
+    product_table = [[Paragraph("Produit", style=pdf_params.table_title_style)]]
     if len(products_not_ordered) > 0:
         pdf_params.story.append(Paragraph("Produits sans commande ", pdf_params.subtitle_style))
         for product_name in products_not_ordered:
-            pdf_params.story.append(Paragraph(product_name, pdf_params.normal_style))
+            product_table.append([name])
+        pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
 
 
 def write_pdf_file():
