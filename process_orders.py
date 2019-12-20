@@ -130,20 +130,20 @@ def write_client_orders(output_file, orders):
     if file_params.file is None:
         text_file_init(output_file)
 
-    for name,entry in orders.items():
-        client_email = entry.get_email()
+    for client_name,client in orders.items():
+        client_email = client.get_email()
 
         if client_email is None:
             client_email = "email non spécifié"
 
         print('-----------------------------------------------------------', file=file_params.file)
-        print("Commande pour {} ({})".format(name, client_email), file=file_params.file)
-        for product in entry.get_products():
+        print("Commande pour {} ({})".format(client_name, client_email), file=file_params.file)
+        for product in client.get_products():
             print('{}: {} {}\t({:.2f}€)'.format(product.get_name(),
                                                 product.get_quantity(),
                                                 product.get_quantity_unit(),
                                                 product.total_price()), file=file_params.file)
-        print("\nPrix total = {:.2f}€".format(entry.get_total_price()), file=file_params.file)
+        print("\nPrix total = {:.2f}€".format(client.get_total_price()), file=file_params.file)
         print('-----------------------------------------------------------', file=file_params.file)
         print(file=file_params.file)
 
@@ -206,25 +206,25 @@ def client_orders_pdf(filename, orders):
     if pdf_params.doc is None:
         PDFInit(filename)
 
-    for name,entry in orders.items():
-        client_email = entry.get_email()
+    for client_name,client in orders.items():
+        client_email = client.get_email()
         if client_email is None:
             client_email = "non spécifié"
 
-        pdf_params.story.append(Paragraph("Commande de {}".format(name), pdf_params.title_style))
+        pdf_params.story.append(Paragraph("Commande de {}".format(client_name), pdf_params.title_style))
         pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
         pdf_params.story.append(Spacer(1, 0.2 * inch))
 
         product_table = [[[Paragraph("Produit", style=pdf_params.table_title_style)],
                           [Paragraph("Quantité", style=pdf_params.table_title_style)],
                           [Paragraph("Prix", style=pdf_params.table_title_style)]]]
-        for product in entry.get_products():
+        for product in client.get_products():
             product_table.append([product.get_name(),
                                   '{} {}'.format(product.get_quantity(), product.get_quantity_unit()),
                                   '{:.2f}€'.format(product.total_price())])
         pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
 
-        total_line = "\nPrix total pour {} = {:.2f}€".format(name, entry.get_total_price())
+        total_line = "\nPrix total pour {} = {:.2f}€".format(client_name, client.get_total_price())
         pdf_params.story.append(Spacer(1, 0.2 * inch))
         pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
         pdf_params.story.append(Spacer(1, 1 * inch))
@@ -273,9 +273,9 @@ def clients_summary_pdf(filename, orders):
 
     clients_table = [[[Paragraph("Nom", style=pdf_params.table_title_style)],
                       [Paragraph("Somme Dûe", style=pdf_params.table_title_style)]]]
-    for name,entry in orders.items():
-        clients_table.append([name,
-                              '{:.2f}€'.format(entry.get_total_price())])
+    for client_name,client in orders.items():
+        clients_table.append([client_name,
+                              '{:.2f}€'.format(client.get_total_price())])
     pdf_params.story.append(Table(clients_table, style=pdf_params.table_style))
 
 
