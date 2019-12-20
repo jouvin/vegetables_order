@@ -272,6 +272,8 @@ def main():
     try:
         with open(options.csv, 'r') as csvfile:
             rows = csv.DictReader(csvfile, delimiter=';')
+            while NAME_FIELD not in rows.fieldnames:
+                rows = csv.DictReader(csvfile, delimiter=';')
             for row in rows:
                 name = None
                 client = Client()
