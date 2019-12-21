@@ -271,12 +271,18 @@ def clients_summary_pdf(filename, orders):
 
     pdf_params.story.append(Paragraph("Somme Dûe par Client", pdf_params.title_style))
 
+    total_price = 0
     clients_table = [[[Paragraph("Nom", style=pdf_params.table_title_style)],
                       [Paragraph("Somme Dûe", style=pdf_params.table_title_style)]]]
     for client_name,client in orders.items():
         clients_table.append([client_name,
                               '{:.2f}€'.format(client.get_total_price())])
+        total_price += client.get_total_price()
     pdf_params.story.append(Table(clients_table, style=pdf_params.table_style))
+
+    total_line = "\nMontant total des commandes = {:.2f}€".format(total_price)
+    pdf_params.story.append(Spacer(1, 0.2 * inch))
+    pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
 
 
 def write_pdf_file():
