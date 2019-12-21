@@ -322,7 +322,7 @@ def main():
                     if name is None:
                         if k == NAME_FIELD:
                             if v != '':
-                                name = v
+                                name = v.capitalize()
                             else:
                                 raise Exception('Entrée invalide: le nom est vide')
                         continue
