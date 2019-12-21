@@ -130,7 +130,7 @@ def write_client_orders(output_file, orders):
     if file_params.file is None:
         text_file_init(output_file)
 
-    for client_name,client in orders.items():
+    for client_name,client in sorted(orders.items()):
         client_email = client.get_email()
 
         if client_email is None:
@@ -206,7 +206,7 @@ def client_orders_pdf(filename, orders):
     if pdf_params.doc is None:
         PDFInit(filename)
 
-    for client_name,client in orders.items():
+    for client_name,client in sorted(orders.items()):
         client_email = client.get_email()
         if client_email is None:
             client_email = "non spécifié"
@@ -274,7 +274,7 @@ def clients_summary_pdf(filename, orders):
     total_price = 0
     clients_table = [[[Paragraph("Nom", style=pdf_params.table_title_style)],
                       [Paragraph("Somme Dûe", style=pdf_params.table_title_style)]]]
-    for client_name,client in orders.items():
+    for client_name,client in sorted(orders.items()):
         clients_table.append([client_name,
                               '{:.2f}€'.format(client.get_total_price())])
         total_price += client.get_total_price()
