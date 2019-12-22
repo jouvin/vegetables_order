@@ -10,7 +10,7 @@ from reportlab.rl_config import defaultPageSize
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 
-
+COMMENT_FIELD = "Commentaire"
 EMAIL_FIELD = 'E-mail'
 NAME_FIELD = 'NOM - PRENOM'
 
@@ -104,12 +104,16 @@ class ProductOrder():
 
 class Client():
     def __init__(self):
+        self.comment = None
         self.email = None
         self.products = []
         self.total_price = None
 
     def add_product(self, product):
         self.products.append(product)
+
+    def get_comment(self):
+        return self.comment
 
     def get_email(self):
         return self.email
@@ -123,6 +127,9 @@ class Client():
             for product in self.products:
                 self.total_price += product.total_price()
         return self.total_price
+
+    def set_comment(self, comment):
+        self.comment = comment
 
     def set_email(self, email):
         self.email = email
@@ -156,6 +163,10 @@ def write_client_orders(output_file, orders):
                                                 product.total_price()), file=file_params.file)
             if product.get_erroneous_quantity() is not None:
                 suspect_quantities.append((product))
+
+        if client.get_comment():
+            print("\nCommentaire de {} :".format(client_name), file=file_params.file)
+            print(client.get_comment(), file=file_params.file)
 
         if len(suspect_quantities) > 0:
             print("\nQuantité suspecte corrigée pour les produits suivants :", file=file_params.file)
@@ -251,6 +262,12 @@ def client_orders_pdf(filename, orders):
         total_line = "\nPrix total pour {} = {:.2f}€".format(client_name, client.get_total_price())
         pdf_params.story.append(Spacer(1, 0.2 * inch))
         pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
+
+        if client.get_comment():
+            pdf_params.story.append(Spacer(1, 0.2 * inch))
+            pdf_params.story.append(Paragraph("\nCommentaire de {} :".format(client_name), pdf_params.total_style))
+            pdf_params.story.append(Spacer(1, 0.1 * inch))
+            pdf_params.story.append(Paragraph(client.get_comment(), pdf_params.normal_style))
 
         if len(suspect_quantities) > 0:
             pdf_params.story.append(Spacer(1, 0.2 * inch))
@@ -367,6 +384,10 @@ def main():
                     elif k == EMAIL_FIELD:
                         if v != "":
                             client.set_email(v)
+                        continue
+                    elif k == COMMENT_FIELD:
+                        if v != "":
+                            client.set_comment(v)
                         continue
 
                     # If the field is a product, create an entry in the product list to keep the original order of products
