@@ -64,18 +64,22 @@ class Product():
         return self.price_unit
 
     def increase_quantity(self, quantity):
-        self.ordered_quantity += float(re.sub(',', '.', quantity))
+        self.ordered_quantity += quantity
 
 
 class ProductOrder():
     def __init__(self, name):
         self.name = name
+        self.erroneous_quantity = None
         self.quantity = 0
         self.quantity_unit = None
         self.price = 0
 
     def get_name(self):
         return self.name
+
+    def get_erroneous_quantity(self):
+        return self.erroneous_quantity
 
     def get_quantity(self):
         return self.quantity
@@ -84,9 +88,15 @@ class ProductOrder():
         return self.quantity_unit
 
     def set_quantity(self, quantity, product_params):
-        self.quantity = float(re.sub(',', '.', quantity))
         self.quantity_unit = product_params.get_price_unit()
+        # Sometimes clients mix grammes and kilos... attempt to detect it and fix it
+        self.quantity = float(re.sub(',', '.', quantity))
+        if self.quantity_unit == 'kg' and self.quantity >= 100:
+            self.erroneous_quantity = self.quantity
+            self.quantity = self.quantity / 1000.
         self.price = product_params.get_price() * self.quantity
+        # Return the validated quantity
+        return self.quantity
 
     def total_price(self):
         return self.price
@@ -136,6 +146,7 @@ def write_client_orders(output_file, orders):
         if client_email is None:
             client_email = "email non spécifié"
 
+        suspect_quantities = []
         print('-----------------------------------------------------------', file=file_params.file)
         print("Commande pour {} ({})".format(client_name, client_email), file=file_params.file)
         for product in client.get_products():
@@ -143,6 +154,16 @@ def write_client_orders(output_file, orders):
                                                 product.get_quantity(),
                                                 product.get_quantity_unit(),
                                                 product.total_price()), file=file_params.file)
+            if product.get_erroneous_quantity() is not None:
+                suspect_quantities.append((product))
+
+        if len(suspect_quantities) > 0:
+            print("\nQuantité suspecte corrigée pour les produits suivants :", file=file_params.file)
+            for product in suspect_quantities:
+                print("{} : {} {} au lieu de {} {}".format(product.get_name(),
+                                                           product.get_quantity(), product.get_quantity_unit(),
+                                                           product.get_erroneous_quantity(), product.get_quantity_unit()), file=file_params.file)
+
         print("\nPrix total = {:.2f}€".format(client.get_total_price()), file=file_params.file)
         print('-----------------------------------------------------------', file=file_params.file)
         print(file=file_params.file)
@@ -215,6 +236,7 @@ def client_orders_pdf(filename, orders):
         pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
         pdf_params.story.append(Spacer(1, 0.2 * inch))
 
+        suspect_quantities = []
         product_table = [[[Paragraph("Produit", style=pdf_params.table_title_style)],
                           [Paragraph("Quantité", style=pdf_params.table_title_style)],
                           [Paragraph("Prix", style=pdf_params.table_title_style)]]]
@@ -222,11 +244,27 @@ def client_orders_pdf(filename, orders):
             product_table.append([product.get_name(),
                                   '{} {}'.format(product.get_quantity(), product.get_quantity_unit()),
                                   '{:.2f}€'.format(product.total_price())])
+            if product.get_erroneous_quantity() is not None:
+                suspect_quantities.append((product))
         pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
 
         total_line = "\nPrix total pour {} = {:.2f}€".format(client_name, client.get_total_price())
         pdf_params.story.append(Spacer(1, 0.2 * inch))
         pdf_params.story.append(Paragraph(total_line, pdf_params.total_style))
+
+        if len(suspect_quantities) > 0:
+            pdf_params.story.append(Spacer(1, 0.2 * inch))
+            pdf_params.story.append(Paragraph("\nQuantité suspecte pour les produits suivants :", pdf_params.total_style))
+            pdf_params.story.append(Spacer(1, 0.1 * inch))
+            product_table = [[[Paragraph("Produit", style=pdf_params.table_title_style)],
+                              [Paragraph("Quantité demandée", style=pdf_params.table_title_style)],
+                              [Paragraph("Quantité corrigée", style=pdf_params.table_title_style)]]]
+            for product in suspect_quantities:
+                product_table.append([product.get_name(),
+                                      '{} {}'.format(product.get_erroneous_quantity(), product.get_quantity_unit()),
+                                      '{} {}'.format(product.get_quantity(), product.get_quantity_unit())])
+            pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
+
         pdf_params.story.append(Spacer(1, 1 * inch))
         #pdf_params.story.append(PageBreak())
 
@@ -342,8 +380,8 @@ def main():
                     if product_name not in harvest_products:
                         harvest_products[product_name] = Product(m.group('price'), m.group('unit'))
                     if v != '':
-                        product_order.set_quantity(v, harvest_products[product_name])
-                        harvest_products[product_name].increase_quantity(v)
+                        validated_quantity = product_order.set_quantity(v, harvest_products[product_name])
+                        harvest_products[product_name].increase_quantity(validated_quantity)
                         client.add_product(product_order)
                 orders[name] = client
     except:
