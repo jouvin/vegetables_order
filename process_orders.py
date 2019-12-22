@@ -55,7 +55,7 @@ class Product():
         self.ordered_quantity = 0
 
     def get_ordered_quantity(self):
-        return self.ordered_quantity
+        return round(self.ordered_quantity,2)
 
     def get_price(self):
         return self.price
