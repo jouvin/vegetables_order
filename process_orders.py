@@ -311,7 +311,7 @@ def main():
     harvest_products = dict()
 
     try:
-        with open(options.csv, 'r') as csvfile:
+        with open(options.csv, 'r', encoding='utf-8') as csvfile:
             rows = csv.DictReader(csvfile, delimiter=';')
             while NAME_FIELD not in rows.fieldnames:
                 rows = csv.DictReader(csvfile, delimiter=';')
