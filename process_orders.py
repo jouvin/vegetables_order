@@ -30,6 +30,11 @@ def singleton(cls):
     return getinstance
 
 @singleton
+class GlobalParams:
+    def __init__(self):
+        self.verbose = False
+
+@singleton
 class PDFParams:
     def __init__(self):
         self.doc = None
@@ -133,6 +138,30 @@ class Client():
 
     def set_email(self, email):
         self.email = email
+
+
+def debug(msg):
+    global_params = GlobalParams()
+    if global_params.logger:
+        global_params.logger.debug(u'{}'.format(msg))
+    elif global_params.verbose:
+        print (msg)
+
+
+def info(msg):
+    global_params = GlobalParams()
+    if global_params.logger:
+        global_params.logger.info(u'{}'.format(msg))
+    else:
+        print (msg)
+
+
+def exception_handler(exception_type, exception, traceback, debug_hook=sys.excepthook):
+    global_params = GlobalParams()
+    if global_params.verbose:
+        debug_hook(exception_type, exception, traceback)
+    else:
+        print ("{}: {} (use --verbose for details)".format(exception_type.__name__, exception))
 
 
 def text_file_init(output_file):
@@ -355,8 +384,13 @@ def main():
     harvest.add_argument('--no-harvest', '--no-recolte', action='store_false', dest='harvest', help='Produits à récolter')
     parser.add_argument('--output', help='Nom de fichier de sortie')
     parser.add_argument('--format', choices=['pdf', 'text'], default='pdf', help='Ecrire un fichier PDF au lieu de texte')
+    parser.add_argument('--verbose', '-v', action='store_true', default=False, help="Messages pour le diagnostic de problèmes")
     parser.add_argument('csv', help='Fichier des commandes Framaform')
     options = parser.parse_args()
+
+    global_params = GlobalParams()
+    global_params.verbose = options.verbose
+
     if options.format == 'pdf':
         pdf_output = True
     else:
@@ -424,4 +458,5 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.excepthook = exception_handler
     exit(main())
