@@ -11,8 +11,12 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 
 COMMENT_FIELD = "Commentaire"
+DELIVERY_DAY_FIELD = "Livraison"
 EMAIL_FIELD = 'E-mail'
 NAME_FIELD = 'NOM - PRENOM'
+
+DELIVERY_DAY_NO_PREFERENCE_VAL = "Peu importe"
+DELIVERY_DAY_NO_PREFERENCE_STR = "Indifférent"
 
 PRODUCT_PRICE_PATTERN = re.compile(r'\s*(?P<product>.+)\s*-\s*(?P<price>[0-9,]+)€\s*/\s*(?P<unit>\w+)\s*')
 
@@ -32,6 +36,7 @@ def singleton(cls):
 @singleton
 class GlobalParams:
     def __init__(self):
+        self.delivery_day = False
         self.verbose = False
 
 @singleton
@@ -110,6 +115,7 @@ class ProductOrder():
 class Client():
     def __init__(self):
         self.comment = None
+        self.day = None
         self.email = None
         self.products = []
         self.total_price = None
@@ -119,6 +125,9 @@ class Client():
 
     def get_comment(self):
         return self.comment
+
+    def get_day(self):
+        return self.day
 
     def get_email(self):
         return self.email
@@ -135,6 +144,11 @@ class Client():
 
     def set_comment(self, comment):
         self.comment = comment
+
+    def set_day(self, delivery_day):
+        if len(delivery_day) == 0 or delivery_day == DELIVERY_DAY_NO_PREFERENCE_VAL:
+            delivery_day = DELIVERY_DAY_NO_PREFERENCE_STR
+        self.day = delivery_day
 
     def set_email(self, email):
         self.email = email
@@ -264,6 +278,8 @@ def PDFInit(filename):
 
 def client_orders_pdf(filename, orders):
     pdf_params = PDFParams()
+    global_params = GlobalParams()
+
     if pdf_params.doc is None:
         PDFInit(filename)
 
@@ -274,6 +290,8 @@ def client_orders_pdf(filename, orders):
 
         pdf_params.story.append(Paragraph("Commande de {}".format(client_name), pdf_params.title_style))
         pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
+        if global_params.delivery_day:
+            pdf_params.story.append(Paragraph("Jour de livraison : {}".format(client.get_day()), pdf_params.email_style))
         pdf_params.story.append(Spacer(1, 0.2 * inch))
 
         suspect_quantities = []
@@ -404,6 +422,8 @@ def main():
             rows = csv.DictReader(csvfile, delimiter=';')
             while NAME_FIELD not in rows.fieldnames:
                 rows = csv.DictReader(csvfile, delimiter=';')
+                if DELIVERY_DAY_FIELD in rows.fieldnames:
+                    global_params.delivery_day = True
             for row in rows:
                 name = None
                 client = Client()
@@ -422,6 +442,9 @@ def main():
                     elif k == COMMENT_FIELD:
                         if v != "":
                             client.set_comment(v)
+                        continue
+                    elif k == DELIVERY_DAY_FIELD:
+                        client.set_day(v)
                         continue
 
                     # If the field is a product, create an entry in the product list to keep the original order of products
