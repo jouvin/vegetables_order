@@ -282,6 +282,8 @@ def client_orders_pdf(filename, orders):
 
     if pdf_params.doc is None:
         PDFInit(filename)
+    else:
+        pdf_params.story.append(PageBreak())
 
     for client_name,client in sorted(orders.items()):
         client_email = client.get_email()
@@ -333,14 +335,22 @@ def client_orders_pdf(filename, orders):
         #pdf_params.story.append(PageBreak())
 
 
-def harvest_quantity_pdf(filename, harvest_products):
+def harvest_quantity_pdf(filename, harvest_products, delivery_day):
     pdf_params = PDFParams()
+    global_params = GlobalParams()
+
     if pdf_params.doc is None:
         PDFInit(filename)
     else:
         pdf_params.story.append(PageBreak())
 
-    pdf_params.story.append(Paragraph("Produits à récolter", pdf_params.title_style))
+    page_title = "Produits à récolter"
+    if global_params.delivery_day:
+        if delivery_day == DELIVERY_DAY_NO_PREFERENCE_STR:
+            page_title += ' - jour de livraison indifférent'
+        else:
+            page_title += ' pour le {}'.format(delivery_day)
+    pdf_params.story.append(Paragraph(page_title, pdf_params.title_style))
 
     products_not_ordered = []
     product_table = [[[Paragraph("Produit", style=pdf_params.table_title_style)],
@@ -364,14 +374,22 @@ def harvest_quantity_pdf(filename, harvest_products):
 
 
 # Must no be called before client_orders_pdf() or the price will be wrong
-def clients_summary_pdf(filename, orders):
+def clients_summary_pdf(filename, orders, delivery_day):
     pdf_params = PDFParams()
+    global_params = GlobalParams()
+
     if pdf_params.doc is None:
         PDFInit(filename)
     else:
         pdf_params.story.append(PageBreak())
 
-    pdf_params.story.append(Paragraph("Somme Dûe par Client", pdf_params.title_style))
+    page_title = "Somme Dûe par Client"
+    if global_params.delivery_day:
+        if delivery_day == DELIVERY_DAY_NO_PREFERENCE_STR:
+            page_title += ' - jour de livraison indifférent'
+        else:
+            page_title += ' - {}'.format(delivery_day)
+    pdf_params.story.append(Paragraph(page_title, pdf_params.title_style))
 
     total_price = 0
     clients_table = [[[Paragraph("Nom", style=pdf_params.table_title_style)],
@@ -414,6 +432,9 @@ def main():
     else:
         pdf_output = False
 
+    # orders and harvest_products are dict of dict
+    #   - First dict key is the delivery day (or '' if the delivery day is not part of the CSV)
+    #   - Second dict key is the client name
     orders = dict()
     harvest_products = dict()
 
@@ -422,8 +443,8 @@ def main():
             rows = csv.DictReader(csvfile, delimiter=';')
             while NAME_FIELD not in rows.fieldnames:
                 rows = csv.DictReader(csvfile, delimiter=';')
-                if DELIVERY_DAY_FIELD in rows.fieldnames:
-                    global_params.delivery_day = True
+            if DELIVERY_DAY_FIELD in rows.fieldnames:
+                global_params.delivery_day = True
             for row in rows:
                 name = None
                 client = Client()
@@ -447,6 +468,11 @@ def main():
                         client.set_day(v)
                         continue
 
+                    if global_params.delivery_day:
+                        day_key = client.get_day()
+                    else:
+                        day_key = ''
+
                     # If the field is a product, create an entry in the product list to keep the original order of products
                     m = PRODUCT_PRICE_PATTERN.match(k)
                     if m:
@@ -455,29 +481,37 @@ def main():
                     else:
                         raise Exception('Format produit invalide ({})'.format(k))
 
-                    if product_name not in harvest_products:
-                        harvest_products[product_name] = Product(m.group('price'), m.group('unit'))
+                    if day_key not in harvest_products:
+                        harvest_products[day_key] = {}
+                    if product_name not in harvest_products[day_key]:
+                        harvest_products[day_key][product_name] = Product(m.group('price'), m.group('unit'))
                     if v != '':
-                        validated_quantity = product_order.set_quantity(v, harvest_products[product_name])
-                        harvest_products[product_name].increase_quantity(validated_quantity)
+                        validated_quantity = product_order.set_quantity(v, harvest_products[day_key][product_name])
+                        harvest_products[day_key][product_name].increase_quantity(validated_quantity)
                         client.add_product(product_order)
-                orders[name] = client
+                if day_key not in orders:
+                    orders[day_key] = {}
+                orders[day_key][name] = client
     except:
         print("Erreur lors du traitement du fichier {}".format(options.csv))
         raise
 
     if pdf_output:
         if options.clients:
-            client_orders_pdf(options.output, orders)
-            clients_summary_pdf(options.output, orders)
+            for delivery_day in orders:
+                client_orders_pdf(options.output, orders[delivery_day])
+                clients_summary_pdf(options.output, orders[delivery_day], delivery_day)
         if options.harvest:
-            harvest_quantity_pdf(options.output, harvest_products)
+            for delivery_day in orders:
+                harvest_quantity_pdf(options.output, harvest_products[delivery_day], delivery_day)
         write_pdf_file()
     else:
         if options.clients:
-            write_client_orders(options.output, orders)
+            for delivery_day in orders:
+                write_client_orders(options.output, orders[delivery_day])
         if options.harvest:
-            write_harvest_quantity(options.output, harvest_products)
+            for delivery_day in orders:
+                write_harvest_quantity(options.output, harvest_products[delivery_day])
 
 
 if __name__ == "__main__":
