@@ -341,7 +341,7 @@ def harvest_quantity_pdf(filename, harvest_products):
     if len(products_not_ordered) > 0:
         pdf_params.story.append(Paragraph("Produits sans commande ", pdf_params.subtitle_style))
         for product_name in products_not_ordered:
-            product_table.append([name])
+            product_table.append([product_name])
         pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
 
 
