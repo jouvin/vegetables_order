@@ -20,8 +20,10 @@ DELIVERY_DAY_NO_PREFERENCE_STR = "Indifférent"
 
 PRODUCT_PRICE_PATTERN = re.compile(r'\s*(?P<product>.+)\s*-\s*(?P<price>[0-9,]+)€\s*/\s*(?P<unit>\w+)\s*')
 
+# Parameters related to PDF generation
 PAGE_HEIGHT=defaultPageSize[1]
 PAGE_WIDTH=defaultPageSize[0]
+PAGE_MAX_PRODUCT_LINES = 35
 
 # Singleton decorator definition
 def singleton(cls):
@@ -46,6 +48,7 @@ class PDFParams:
         self.story = None
         self.email_style = None
         self.normal_style = None
+        self.page_lines = 0
         self.subtitle_style = None
         self.table_style = None
         self.table_title_style = None
@@ -285,10 +288,29 @@ def client_orders_pdf(filename, orders):
     else:
         pdf_params.story.append(PageBreak())
 
+    first_client = True
     for client_name,client in sorted(orders.items()):
         client_email = client.get_email()
         if client_email is None:
             client_email = "non spécifié"
+
+        # Decide if the client can fit on the current page. It is very empirical...
+        # With the used character size, approximately 35 product lines can fit on one page.
+        # Space used by header + total lines and the potential spacer is estimated in number of
+        # product lines.
+        if first_client:
+            spacer_lines = 0
+        else:
+            spacer_lines = 3
+        header_total_lines = 4
+        cmd_lines = len(client.get_products()) + spacer_lines + header_total_lines
+        if pdf_params.page_lines + cmd_lines > PAGE_MAX_PRODUCT_LINES:
+            pdf_params.page_lines = 0
+            pdf_params.story.append(PageBreak())
+        elif not first_client:
+            pdf_params.story.append(Spacer(1, 1 * inch))
+        first_client = False
+        pdf_params.page_lines += cmd_lines
 
         pdf_params.story.append(Paragraph("Commande de {}".format(client_name), pdf_params.title_style))
         pdf_params.story.append(Paragraph("Email : {}".format(client_email), pdf_params.email_style))
@@ -330,9 +352,9 @@ def client_orders_pdf(filename, orders):
                                       '{} {}'.format(product.get_erroneous_quantity(), product.get_quantity_unit()),
                                       '{} {}'.format(product.get_quantity(), product.get_quantity_unit())])
             pdf_params.story.append(Table(product_table, style=pdf_params.table_style))
-
-        pdf_params.story.append(Spacer(1, 1 * inch))
-        #pdf_params.story.append(PageBreak())
+            # Update the number of lines used to ensure it is taken into account for the next client
+            # It doesn't prevent the suspect product information to be split on next page
+            pdf_params.page_lines += len(suspect_quantities) + 1
 
 
 def harvest_quantity_pdf(filename, harvest_products, delivery_day):
