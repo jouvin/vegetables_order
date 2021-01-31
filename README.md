@@ -5,7 +5,8 @@
 1. Installer Python : le plus simple est d'installer la distribution [Anaconda](https://www.anaconda.com/distribution/). 
    C'est un peu gros mais ça permet d'avoir presque tous les modules nécessaires installés. Répondre aux différentes
    questions, en particulier sur le répertoire d'installation.
-1. Démarrer un terminal et exécuter la commande suivante pour vérifier que l'environnement Python est bien celui
+1. Démarrer un terminal (sur Mac, utiliser l'application `Terminal` qui se trouve dans le dossier `Applications)
+   et exécuter la commande suivante pour vérifier que l'environnement Python est bien celui
 installé à l'étape précédente (vérifier le répertoire qui doit être le même que celui entré lors de l'installation) :
    
    ```bash
