@@ -459,6 +459,7 @@ def main():
     #   - Second dict key is the client name
     orders = dict()
     harvest_products = dict()
+    client_list = set()
 
     try:
         with open(options.csv, 'r', encoding='utf-8') as csvfile:
@@ -473,10 +474,19 @@ def main():
                 for k,v in row.items():
                     if name is None:
                         if k == NAME_FIELD:
-                            if v != '':
-                                name = v.capitalize()
-                            else:
+                            if v == '':
                                 raise Exception('Entrée invalide: le nom est vide')
+                            name = v.capitalize()
+                            if name in client_list:
+                                i = 1
+                                while True:
+                                    i += 1
+                                    new_name = f'{name} ({i})'
+                                    if new_name not in client_list:
+                                        break
+                                print(f'Commande déjà existante pour {name}: nouvelle commande au nom de {new_name}')
+                                name = new_name
+                            client_list.add(name)
                         continue
                     elif k == EMAIL_FIELD:
                         if v != "":
