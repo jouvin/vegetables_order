@@ -463,9 +463,16 @@ def main():
 
     try:
         with open(options.csv, 'r', encoding='utf-8') as csvfile:
-            rows = csv.DictReader(csvfile, delimiter=';')
-            while NAME_FIELD not in rows.fieldnames:
+            try:
                 rows = csv.DictReader(csvfile, delimiter=';')
+                if len(rows.fieldnames) == 1:
+                    print(f"Le fichier CSV '{options.csv}' n'utilise pas le séparateur ';'")
+                    return 1
+                while NAME_FIELD not in rows.fieldnames:
+                    rows = csv.DictReader(csvfile, delimiter=';')
+            except UnicodeDecodeError:
+                print(f"Le fichier '{options.csv}' n'est pas un CSV ou le CSV n'est pas valide")
+                return 1
             if DELIVERY_DAY_FIELD in rows.fieldnames:
                 global_params.delivery_day = True
             for row in rows:
