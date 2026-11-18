@@ -475,7 +475,9 @@ def main():
                 return 1
             if DELIVERY_DAY_FIELD in rows.fieldnames:
                 global_params.delivery_day = True
+            order_line = 0
             for row in rows:
+                order_line += 1
                 name = None
                 client = Client()
                 for k,v in row.items():
@@ -531,6 +533,9 @@ def main():
                 if day_key not in orders:
                     orders[day_key] = {}
                 orders[day_key][name] = client
+
+        if options.verbose:
+            print (f"Number of orders processed = {order_line}")
     except:
         print("Erreur lors du traitement du fichier {}".format(options.csv))
         raise
